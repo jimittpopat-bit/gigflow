@@ -7,8 +7,6 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  // ✅ Toast state (same pattern as Login/Register/GigDetails)
   const [toast, setToast] = useState({ type: "", message: "" });
 
   const showToast = (type, message) => {
@@ -18,8 +16,17 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (user?._id) {
+      socket.connect();
       socket.emit("join", user._id);
+    } else {
+      socket.disconnect();
     }
+
+    return () => {
+      if (user?._id) {
+        socket.disconnect();
+      }
+    };
   }, [user]);
 
   useEffect(() => {
@@ -38,7 +45,6 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
-    // ✅ FIX: toast instead of alert
     socket.on("notification", (data) => {
       if (data?.message) showToast("success", data.message);
     });
@@ -61,7 +67,6 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
 
-      {/* ✅ Toast UI */}
       {toast.message && (
         <div
           className={`fixed top-6 right-6 z-[9999] px-5 py-3 rounded-xl shadow-lg text-white text-sm ${

@@ -25,8 +25,7 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 const allowedOriginRegex = [
-  /^https:\/\/gigflow-.*\.vercel\.app$/, // all preview URLs
-  /^https:\/\/gigflow-beta\.vercel\.app$/, // production domain
+  /^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/,
 ];
 
 app.use(
