@@ -5,9 +5,8 @@ import { useAuth } from "../context/AuthContext";
 
 export default function GigDetails() {
   const navigate = useNavigate();
-
   const { id } = useParams();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   const [gig, setGig] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -20,6 +19,10 @@ export default function GigDetails() {
   const [bidLoading, setBidLoading] = useState(false);
 
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+
+  if (authLoading) {
+    return <div className="p-6 text-gray-300">Loading...</div>;
+  }
 
   // ✅ Toast state
   const [toast, setToast] = useState({ type: "", message: "" });
@@ -74,7 +77,7 @@ export default function GigDetails() {
     ) {
       fetchBids();
     }
-  }, [gig, user]);
+  }, [gig, user, id]);
 
   const handleBidSubmit = async (e) => {
     e.preventDefault();
