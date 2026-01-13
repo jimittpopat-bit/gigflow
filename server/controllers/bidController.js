@@ -41,12 +41,17 @@ exports.placeBid = async (req, res) => {
 
 
 // ✅ SOCKET NOTIFICATION (to gig owner)
-const io = getIO();
-io.to(gig.owner.toString()).emit("notification", {
-  type: "NEW_BID",
-  message: `New bid placed on your gig: ${gig.title}`,
-  gigId: gig._id,
-});
+try {
+  const io = getIO();
+  io.to(gig.owner.toString()).emit("notification", {
+    type: "NEW_BID",
+    message: `New bid placed on your gig: ${gig.title}`,
+    gigId: gig._id,
+  });
+} catch (e) {
+  console.log("Socket not ready, skipping notification");
+}
+
 
 
 return res.status(201).json({ message: "Bid placed", bid });

@@ -44,29 +44,31 @@ export default function GigDetails() {
     }
   };
 
-  const fetchGig = async () => {
-    try {
-      setLoading(true);
-      const data = await apiRequest(`/api/gigs/${id}`);
-      const gigData = data.gig || data;
+const fetchGig = async () => {
+  try {
+    setLoading(true);
+    const data = await apiRequest(`/api/gigs/${id}`);
+    const gigData = data.gig || data;
 
-      setGig(gigData);
+    setGig(gigData);
+  } catch (err) {
+    showToast("error", err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
-      // ✅ if owner, load bids
-      if (user?._id === gigData.owner) {
-        fetchBids();
-      }
-    } catch (err) {
-      showToast("error", err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  useEffect(() => {
-    fetchGig();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+useEffect(() => {
+  fetchGig();
+}, [id]);
+
+useEffect(() => {
+  if (gig && user?._id && user._id === gig.owner) {
+    fetchBids();
+  }
+}, [gig, user]);
+
 
   const handleBidSubmit = async (e) => {
     e.preventDefault();

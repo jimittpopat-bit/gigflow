@@ -14,8 +14,10 @@ export default function Applications() {
     try {
       setLoading(true);
 
-      const bidsRes = await apiRequest("/api/bids/my");
-      const gigsRes = await apiRequest("/api/gigs/my");
+      const [bidsRes, gigsRes] = await Promise.all([
+        apiRequest("/api/bids/my"),
+        apiRequest("/api/gigs/my"),
+      ]);
 
       setMyBids(bidsRes.bids || []);
       setMyGigs(gigsRes.gigs || []);
@@ -26,17 +28,15 @@ export default function Applications() {
     }
   };
 
-useEffect(() => {
-  fetchData();
-}, []);
-
-useEffect(() => {
-  if (location.state?.refresh) {
+  useEffect(() => {
     fetchData();
-  }
-}, [location.state]);
+  }, []);
 
-
+  useEffect(() => {
+    if (location.state?.refresh) {
+      fetchData();
+    }
+  }, [location.state]);
 
   const Card = ({ title, children }) => (
     <div className="rounded-3xl border border-white/10 bg-dark-card/70 backdrop-blur-heavy p-6 md:p-8 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
