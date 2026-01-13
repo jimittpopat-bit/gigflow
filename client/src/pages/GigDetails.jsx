@@ -44,31 +44,37 @@ export default function GigDetails() {
     }
   };
 
-const fetchGig = async () => {
-  try {
-    setLoading(true);
-    const data = await apiRequest(`/api/gigs/${id}`);
-    const gigData = data.gig || data;
+  const fetchGig = async () => {
+    try {
+      setLoading(true);
+      const data = await apiRequest(`/api/gigs/${id}`);
+      const gigData = data.gig || data;
 
-    setGig(gigData);
-  } catch (err) {
-    showToast("error", err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      setGig(gigData);
+    } catch (err) {
+      showToast("error", err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    fetchGig();
+  }, [id]);
 
-useEffect(() => {
-  fetchGig();
-}, [id]);
+  useEffect(() => {
+    const ownerId =
+      typeof gig?.owner === "object" ? gig.owner?._id : gig?.owner;
 
-useEffect(() => {
-  if (gig && user?._id && user._id === gig.owner) {
-    fetchBids();
-  }
-}, [gig, user]);
-
+    if (
+      gig &&
+      user?._id &&
+      ownerId &&
+      user._id.toString() === ownerId.toString()
+    ) {
+      fetchBids();
+    }
+  }, [gig, user]);
 
   const handleBidSubmit = async (e) => {
     e.preventDefault();
@@ -139,7 +145,9 @@ useEffect(() => {
   if (!gig)
     return <p className="mt-16 text-white/70 text-center">Gig not found</p>;
 
-  const isOwner = user?._id?.toString() === gig.owner?.toString();
+  const ownerId = typeof gig?.owner === "object" ? gig.owner?._id : gig?.owner;
+
+  const isOwner = user?._id?.toString() === ownerId?.toString();
 
   const isOpen = gig.status === "open";
 
