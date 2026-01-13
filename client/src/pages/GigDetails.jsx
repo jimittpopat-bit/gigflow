@@ -66,15 +66,11 @@ export default function GigDetails() {
   }, [id]);
 
   useEffect(() => {
-    const ownerId =
-      typeof gig?.owner === "object" ? gig.owner?._id : gig?.owner;
+    const ownerId = gig?.owner?._id || gig?.owner?.id || gig?.owner;
 
-    if (
-      gig &&
-      user?._id &&
-      ownerId &&
-      user._id.toString() === ownerId.toString()
-    ) {
+    const userId = user?._id || user?.id;
+
+    if (gig && userId && ownerId && userId.toString() === ownerId.toString()) {
       fetchBids();
     }
   }, [gig, user, id]);
@@ -148,9 +144,11 @@ export default function GigDetails() {
   if (!gig)
     return <p className="mt-16 text-white/70 text-center">Gig not found</p>;
 
-  const ownerId = typeof gig?.owner === "object" ? gig.owner?._id : gig?.owner;
+  const userId = user?._id || user?.id;
 
-  const isOwner = user?._id?.toString() === ownerId?.toString();
+  const ownerId = gig?.owner?._id || gig?.owner?.id || gig?.owner;
+
+  const isOwner = userId?.toString() === ownerId?.toString();
 
   const isOpen = gig.status === "open";
 
