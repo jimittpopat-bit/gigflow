@@ -5,7 +5,6 @@ A full-stack mini-freelance marketplace where clients can post jobs (Gigs) and f
 ## 🔗 Live Links
 - **Frontend:** https://gigflow-beta.vercel.app  
 - **Backend:** https://gigflow-nlol.onrender.com  
-- **GitHub Repo:** https://github.com/jimittpopat-bit/gigflow
 
 ## 🎥 Demo Video
 - **Drive Link:** https://drive.google.com/file/d/1_zNWyWLHAibmi3T--bR0rIzQXqJRLdpA/view?usp=vids_web
