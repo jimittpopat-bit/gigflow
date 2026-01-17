@@ -28,18 +28,13 @@ if (process.env.NODE_ENV === "production") {
   app.use(xss());
 }
 
+
+
 const allowedOrigins = [
   "http://localhost:5173", 
   process.env.CLIENT_URL,
-  "https://gigflow-beta.vercel.app",  // ✅ Add this
+  "https://gigflow-beta.vercel.app",
 ].filter(Boolean);
-```
-
-**Also update your environment variables on Render:**
-
-Go to your Render dashboard → Your service → Environment → Add:
-```
-CLIENT_URL=https://gigflow-beta.vercel.app
 
 const allowedOriginRegex = [/^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/];
 
@@ -57,7 +52,7 @@ if (process.env.NODE_ENV !== "production") {
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
-    }),
+    })
   );
 } else {
   // ✅ PROD: strict allowlist
@@ -77,7 +72,7 @@ if (process.env.NODE_ENV !== "production") {
       credentials: true,
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       allowedHeaders: ["Content-Type", "Authorization"],
-    }),
+    })
   );
 }
 
