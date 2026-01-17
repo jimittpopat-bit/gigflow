@@ -14,6 +14,11 @@ const authRoutes = require("./routes/authRoutes");
 const gigRoutes = require("./routes/gigRoutes");
 const bidRoutes = require("./routes/bidRoutes");
 const app = express();
+
+console.log("Express version:", require("express/package.json").version);
+console.log("NODE_ENV:", process.env.NODE_ENV);
+
+
 const helmet = require("helmet");
 const xss = require("xss-clean");
 const rateLimit = require("express-rate-limit");
