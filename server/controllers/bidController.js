@@ -3,10 +3,13 @@ const mongoose = require("mongoose");
 const Bid = require("../models/Bid");
 const Gig = require("../models/Gig");
 
-// POST /api/bids
+// POST /api/bids/:gigId
 exports.placeBid = async (req, res) => {
   try {
-    const { gigId, amount, message } = req.body;
+    // ✅ FIX: gigId comes from URL params, not body
+    const { gigId } = req.params;
+    // ✅ FIX: changed 'message' to 'proposal' to match validator
+    const { amount, proposal } = req.body;
     
     const gig = await Gig.findById(gigId);
     if (!gig) return res.status(404).json({ message: "Gig not found" });
@@ -18,8 +21,8 @@ exports.placeBid = async (req, res) => {
     // user cannot bid on own gig
     if (gig.owner.toString() === req.user._id.toString()) {
       return res
-      .status(400)
-      .json({ message: "You cannot bid on your own gig" });
+        .status(400)
+        .json({ message: "You cannot bid on your own gig" });
     }
     
     // prevent duplicate bid
@@ -31,37 +34,32 @@ exports.placeBid = async (req, res) => {
     if (existing) {
       return res.status(400).json({ message: "You already placed a bid" });
     }
-    const bid = await Bid.create({
-  gigId,
-  freelancerId: req.user._id,
-  amount,
-  message,
-  status: "pending",
-});
-
-
-// ✅ SOCKET NOTIFICATION (to gig owner)
-try {
-  const io = getIO();
-  io.to(gig.owner.toString()).emit("notification", {
-    type: "NEW_BID",
-    message: `New bid placed on your gig: ${gig.title}`,
-    gigId: gig._id,
-  });
-} catch (e) {
-  console.log("Socket not ready, skipping notification");
-}
-
-
-
-return res.status(201).json({ message: "Bid placed", bid });
-
     
+    const bid = await Bid.create({
+      gigId,
+      freelancerId: req.user._id,
+      amount,
+      message: proposal, // ✅ Store proposal as message in DB
+      status: "pending",
+    });
+
+    // ✅ SOCKET NOTIFICATION (to gig owner)
+    try {
+      const io = getIO();
+      io.to(gig.owner.toString()).emit("notification", {
+        type: "NEW_BID",
+        message: `New bid placed on your gig: ${gig.title}`,
+        gigId: gig._id,
+      });
+    } catch (e) {
+      console.log("Socket not ready, skipping notification");
+    }
+
+    return res.status(201).json({ message: "Bid placed", bid });
   } catch (err) {
     console.log("PLACE BID ERROR:", err);
     res.status(500).json({ message: "Server error" });
   }
-  
 };
 
 // GET /api/bids/:gigId  (OWNER ONLY)
