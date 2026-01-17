@@ -128,10 +128,18 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
-    const mongoUri =
-      process.env.NODE_ENV === "test"
-        ? process.env.MONGO_URI_TEST
-        : process.env.MONGO_URI;
+    // ✅ FIXED: Don't connect to MongoDB in test environment
+    // Tests use MongoDB Memory Server via setup.js
+    if (process.env.NODE_ENV === "test") {
+      console.log("Test environment - skipping MongoDB connection");
+      return;
+    }
+
+    const mongoUri = process.env.MONGO_URI;
+
+    if (!mongoUri) {
+      throw new Error("MONGO_URI environment variable is not defined");
+    }
 
     await mongoose.connect(mongoUri);
 
