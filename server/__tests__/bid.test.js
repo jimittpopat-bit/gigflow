@@ -46,22 +46,19 @@ describe("Bid API", () => {
 
     expect(gigRes.statusCode).toBe(201);
 
-    // ✅ FIX: backend returns { gig: {...} }
     const gigId = gigRes.body.gig._id;
 
-    // freelancer places bid ✅
+    // ✅ FIX: gigId goes in URL path, not body
     const bidRes = await request(app)
-      .post("/api/bids")
+      .post(`/api/bids/${gigId}`)
       .set("Cookie", freelancerCookies)
       .send({
-        gigId,
         amount: 250,
-        message: "I can do this in 2 days",
+        proposal: "I can do this in 2 days", // ✅ Changed 'message' to 'proposal'
       });
 
     expect(bidRes.statusCode).toBe(201);
 
-    // ✅ FIX: backend returns { bid: {...} }
     expect(bidRes.body).toHaveProperty("bid");
     expect(bidRes.body.bid).toHaveProperty("_id");
   });
@@ -102,14 +99,13 @@ describe("Bid API", () => {
     expect(gigRes.statusCode).toBe(201);
     const gigId = gigRes.body.gig._id;
 
-    // freelancer places bid
+    // ✅ FIX: gigId in URL path
     const bidRes = await request(app)
-      .post("/api/bids")
+      .post(`/api/bids/${gigId}`)
       .set("Cookie", freelancerCookies)
       .send({
-        gigId,
         amount: 350,
-        message: "Best price",
+        proposal: "Best price", // ✅ Changed 'message' to 'proposal'
       });
 
     expect(bidRes.statusCode).toBe(201);
@@ -159,20 +155,19 @@ describe("Bid API", () => {
     expect(gigRes.statusCode).toBe(201);
     const gigId = gigRes.body.gig._id;
 
-    // freelancer places bid
+    // ✅ FIX: gigId in URL path
     const bidRes = await request(app)
-      .post("/api/bids")
+      .post(`/api/bids/${gigId}`)
       .set("Cookie", freelancerCookies)
       .send({
-        gigId,
         amount: 450,
-        message: "I will deliver fast",
+        proposal: "I will deliver fast", // ✅ Changed 'message' to 'proposal'
       });
 
     expect(bidRes.statusCode).toBe(201);
     const bidId = bidRes.body.bid._id;
 
-    // client hires bid ✅
+    // client hires bid
     const hireRes = await request(app)
       .patch(`/api/bids/${bidId}/hire`)
       .set("Cookie", clientCookies)
