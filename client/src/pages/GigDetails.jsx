@@ -33,10 +33,7 @@ export default function GigDetails() {
   });
   const showToast = (msg, type = "success") => {
     setToast({ show: true, type, msg });
-    setTimeout(
-      () => setToast({ show: false, type: "success", msg: "" }),
-      2200
-    );
+    setTimeout(() => setToast({ show: false, type: "success", msg: "" }), 2200);
   };
 
   const fetchGig = async () => {
@@ -54,7 +51,10 @@ export default function GigDetails() {
         budget: gigData?.budget || "",
       });
     } catch (err) {
-      showToast(err?.response?.data?.message || "Failed to load gig ❌", "error");
+      showToast(
+        err?.response?.data?.message || "Failed to load gig ❌",
+        "error",
+      );
     } finally {
       setLoading(false);
     }
@@ -94,10 +94,9 @@ export default function GigDetails() {
     try {
       setBidLoading(true);
 
-      await api.post("/api/bids", {
-        gigId: id,
+      await api.post(`/api/bids/${id}`, {
         amount: Number(bidAmount),
-        message: bidMessage,
+        proposal: bidMessage,
       });
 
       showToast("Bid placed ✅");
@@ -145,7 +144,7 @@ export default function GigDetails() {
     } catch (err) {
       showToast(
         err?.response?.data?.message || "Withdraw gig failed ❌",
-        "error"
+        "error",
       );
     }
   };
@@ -303,7 +302,9 @@ export default function GigDetails() {
                         Bidder: {b?.bidder?.name || bidderId || "Unknown"}
                       </p>
                       {b?.message && (
-                        <p className="text-sm text-white/70 mt-2">{b.message}</p>
+                        <p className="text-sm text-white/70 mt-2">
+                          {b.message}
+                        </p>
                       )}
                     </div>
 
@@ -327,9 +328,15 @@ export default function GigDetails() {
                               ? "bg-green-600/30 cursor-not-allowed"
                               : "bg-green-600 hover:bg-green-700"
                           }`}
-                          title={!canHire ? "Gig is not open" : "Hire freelancer"}
+                          title={
+                            !canHire ? "Gig is not open" : "Hire freelancer"
+                          }
                         >
-                          {bidLoading ? "..." : canHire ? "Hire" : "Hire Disabled"}
+                          {bidLoading
+                            ? "..."
+                            : canHire
+                              ? "Hire"
+                              : "Hire Disabled"}
                         </button>
                       )}
                     </div>
@@ -367,7 +374,10 @@ export default function GigDetails() {
                   <textarea
                     value={editForm.description}
                     onChange={(e) =>
-                      setEditForm((p) => ({ ...p, description: e.target.value }))
+                      setEditForm((p) => ({
+                        ...p,
+                        description: e.target.value,
+                      }))
                     }
                     className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 mt-1 min-h-[110px] outline-none focus:border-purple-400"
                     required
