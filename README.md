@@ -19,6 +19,9 @@ A modern full-stack freelance marketplace platform built with the MERN stack, fe
 ### Login Page
 ![Login Page](./screenshots/login-page.png)
 
+### Register Page
+![Register Page](./screenshots/register-page.png)
+
 ### Gigs Page
 ![Gigs Page](./screenshots/gigs-page.png)
 
@@ -28,8 +31,6 @@ A modern full-stack freelance marketplace platform built with the MERN stack, fe
 ### Gig Details & Applications
 ![Application Page](./screenshots/application-page.png)
 
-### Register Page
-![Register Page](./screenshots/register-page.png)
 
 </div>
 
