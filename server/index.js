@@ -5,60 +5,87 @@ const cors = require("cors");
 const { Server } = require("socket.io");
 const { setSocketServerInstance } = require("./socket");
 require("dotenv").config({ quiet: true });
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./docs/swagger");
 
 const http = require("http");
 
 const authRoutes = require("./routes/authRoutes");
 const gigRoutes = require("./routes/gigRoutes");
 const bidRoutes = require("./routes/bidRoutes");
-
 const app = express();
+const helmet = require("helmet");
+const xss = require("xss-clean");
+const rateLimit = require("express-rate-limit");
 
 // middlewares
 app.use(express.json());
 app.use(cookieParser());
+app.use(helmet());
 
 
-const allowedOrigins = [
-  "http://localhost:5173",
-  process.env.CLIENT_URL, 
-].filter(Boolean);
+if (process.env.NODE_ENV === "production") {
+  app.use(xss());
+}
 
-const allowedOriginRegex = [
-  /^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/,
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow Postman / server-to-server
-      if (!origin) return callback(null, true);
-
-      // exact match
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      // regex match
-      if (allowedOriginRegex.some((rx) => rx.test(origin))) {
-        return callback(null, true);
-      }
-
-      return callback(new Error("Not allowed by CORS: " + origin));
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
+const allowedOrigins = ["http://localhost:5173", process.env.CLIENT_URL].filter(
+  Boolean,
 );
+
+const allowedOriginRegex = [/^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/];
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 30, // 30 requests per window per IP
+  message: { message: "Too many requests. Try again later." },
+});
+
+// ✅ DEV: allow all origins (avoid CORS headache)
+if (process.env.NODE_ENV !== "production") {
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
+} else {
+  // ✅ PROD: strict allowlist
+  app.use(
+    cors({
+      origin: function (origin, callback) {
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) return callback(null, true);
+
+        if (allowedOriginRegex.some((rx) => rx.test(origin))) {
+          return callback(null, true);
+        }
+
+        return callback(new Error("Not allowed by CORS: " + origin));
+      },
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
+}
 
 // routes
 app.use("/api/auth", authRoutes);
 app.use("/api/gigs", gigRoutes);
 app.use("/api/bids", bidRoutes);
 
+app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 app.get("/", (req, res) => {
   res.send("GigFlow backend running ✅");
+});
+
+app.use((err, req, res, next) => {
+  console.error("🔥 ERROR:", err);
+  res.status(500).json({ message: err.message || "Server error" });
 });
 
 // ✅ create server AFTER app is created
@@ -101,7 +128,13 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    const mongoUri =
+      process.env.NODE_ENV === "test"
+        ? process.env.MONGO_URI_TEST
+        : process.env.MONGO_URI;
+
+    await mongoose.connect(mongoUri);
+
     console.log("MongoDB connected ✅");
 
     server.listen(PORT, () => {
@@ -113,4 +146,8 @@ const startServer = async () => {
   }
 };
 
-startServer();
+if (process.env.NODE_ENV !== "test") {
+  startServer();
+}
+
+module.exports = app;

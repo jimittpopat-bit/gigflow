@@ -1,61 +1,60 @@
-import { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { apiRequest } from "../utils/api";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import api from "../utils/api";
 import { useAuth } from "../context/AuthContext";
 
 export default function GigDetails() {
-  const navigate = useNavigate();
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
 
+  const userId = user?._id || user?.id || null;
+
   const [gig, setGig] = useState(null);
-  const [loading, setLoading] = useState(false);
-
   const [bids, setBids] = useState([]);
-  const [bidsLoading, setBidsLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
+  const [bidAmount, setBidAmount] = useState("");
   const [bidMessage, setBidMessage] = useState("");
-  const [bidPrice, setBidPrice] = useState("");
   const [bidLoading, setBidLoading] = useState(false);
 
-  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    budget: "",
+  });
+  const [editLoading, setEditLoading] = useState(false);
 
-  if (authLoading) {
-    return <div className="p-6 text-gray-300">Loading...</div>;
-  }
-
-  // ✅ Toast state
-  const [toast, setToast] = useState({ type: "", message: "" });
-
-  const showToast = (type, message) => {
-    setToast({ type, message });
-
-    setTimeout(() => {
-      setToast({ type: "", message: "" });
-    }, 3000);
-  };
-
-  const fetchBids = async () => {
-    try {
-      setBidsLoading(true);
-      const data = await apiRequest(`/api/bids/${id}`);
-      setBids(data.bids || data);
-    } catch (err) {
-      showToast("error", err.message);
-    } finally {
-      setBidsLoading(false);
-    }
+  const [toast, setToast] = useState({
+    show: false,
+    type: "success",
+    msg: "",
+  });
+  const showToast = (msg, type = "success") => {
+    setToast({ show: true, type, msg });
+    setTimeout(
+      () => setToast({ show: false, type: "success", msg: "" }),
+      2200
+    );
   };
 
   const fetchGig = async () => {
     try {
       setLoading(true);
-      const data = await apiRequest(`/api/gigs/${id}`);
-      const gigData = data.gig || data;
+      const res = await api.get(`/api/gigs/${id}`);
+      const gigData = res.data?.gig || res.data;
 
       setGig(gigData);
+      setBids(gigData?.bids || []);
+
+      setEditForm({
+        title: gigData?.title || "",
+        description: gigData?.description || "",
+        budget: gigData?.budget || "",
+      });
     } catch (err) {
-      showToast("error", err.message);
+      showToast(err?.response?.data?.message || "Failed to load gig ❌", "error");
     } finally {
       setLoading(false);
     }
@@ -63,297 +62,365 @@ export default function GigDetails() {
 
   useEffect(() => {
     fetchGig();
+    // eslint-disable-next-line
   }, [id]);
 
-  useEffect(() => {
-    const ownerId = gig?.owner?._id || gig?.owner?.id || gig?.owner;
+  const ownerId = useMemo(() => {
+    if (!gig?.owner) return null;
+    if (typeof gig.owner === "string") return gig.owner;
+    return gig.owner?._id || gig.owner?.id || null;
+  }, [gig]);
 
-    const userId = user?._id || user?.id;
+  const isOwner = useMemo(() => {
+    if (!ownerId || !userId) return false;
+    return String(ownerId) === String(userId);
+  }, [ownerId, userId]);
 
-    if (gig && userId && ownerId && userId.toString() === ownerId.toString()) {
-      fetchBids();
-    }
-  }, [gig, user, id]);
+  const myBid = useMemo(() => {
+    if (!userId) return null;
+    return (bids || []).find((b) => {
+      const bidderId = b?.bidder?._id || b?.bidder?.id || b?.bidder;
+      return String(bidderId) === String(userId);
+    });
+  }, [bids, userId]);
 
-  const handleBidSubmit = async (e) => {
+  const canHire = gig?.status === "open"; // ✅ disable after withdrawn/assigned
+
+  const handlePlaceBid = async (e) => {
     e.preventDefault();
 
-    // ✅ extra safety (front-end guard)
-    if (gig?.status !== "open") {
-      showToast("error", "Gig is not open for bidding");
-      return;
-    }
+    if (!bidAmount) return showToast("Enter bid amount", "error");
 
     try {
       setBidLoading(true);
 
-      await apiRequest("/api/bids", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          gigId: id,
-          amount: Number(bidPrice),
-          message: bidMessage,
-        }),
+      await api.post("/api/bids", {
+        gigId: id,
+        amount: Number(bidAmount),
+        message: bidMessage,
       });
 
-      showToast("success", "Bid submitted");
+      showToast("Bid placed ✅");
+      setBidAmount("");
       setBidMessage("");
-      setBidPrice("");
+      await fetchGig();
     } catch (err) {
-      showToast("error", err.message);
+      showToast(err?.response?.data?.message || "Bid failed ❌", "error");
     } finally {
       setBidLoading(false);
     }
   };
 
-  const handleHire = async (bidId) => {
+  const handleWithdrawBid = async (bidId) => {
     try {
-      await apiRequest(`/api/bids/${bidId}/hire`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      showToast("success", "Freelancer hired");
-      fetchGig();
-      fetchBids();
+      setBidLoading(true);
+      await api.delete(`/api/bids/${bidId}`);
+      showToast("Bid withdrawn ✅");
+      await fetchGig();
     } catch (err) {
-      showToast("error", err.message);
+      showToast(err?.response?.data?.message || "Withdraw failed ❌", "error");
+    } finally {
+      setBidLoading(false);
     }
   };
 
-  // ✅ Withdraw gig
-  const handleWithdraw = async () => {
+  const handleHireBid = async (bidId) => {
     try {
-      await apiRequest(`/api/gigs/${id}/withdraw`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-      });
-
-      showToast("success", "Gig withdrawn ✅");
-      setGig((prev) => ({ ...prev, status: "withdrawn" }));
-      navigate("/applications", { state: { refresh: true } });
+      setBidLoading(true);
+      await api.post(`/api/bids/${bidId}/hire`);
+      showToast("Hired ✅");
+      await fetchGig();
     } catch (err) {
-      showToast("error", err.message);
+      showToast(err?.response?.data?.message || "Hire failed ❌", "error");
+    } finally {
+      setBidLoading(false);
     }
   };
 
-  if (loading)
-    return <p className="mt-16 text-white/70 text-center">Loading...</p>;
+  const handleWithdrawGig = async () => {
+    try {
+      await api.patch(`/api/gigs/${id}/withdraw`);
+      showToast("Gig withdrawn ✅");
+      await fetchGig();
+    } catch (err) {
+      showToast(
+        err?.response?.data?.message || "Withdraw gig failed ❌",
+        "error"
+      );
+    }
+  };
 
-  if (!gig)
-    return <p className="mt-16 text-white/70 text-center">Gig not found</p>;
+  const handleUpdateGig = async (e) => {
+    e.preventDefault();
 
-  const userId = user?._id || user?.id;
+    try {
+      setEditLoading(true);
 
-  const ownerId = gig?.owner?._id || gig?.owner?.id || gig?.owner;
+      await api.patch(`/api/gigs/${id}`, {
+        title: editForm.title,
+        description: editForm.description,
+        budget: Number(editForm.budget),
+      });
 
-  const isOwner = userId?.toString() === ownerId?.toString();
+      showToast("Gig updated ✅");
+      setShowEditModal(false);
+      await fetchGig();
+    } catch (err) {
+      showToast(err?.response?.data?.message || "Update failed ❌", "error");
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
-  const isOpen = gig.status === "open";
+  if (authLoading || loading)
+    return <div className="p-6 text-white/80">Loading...</div>;
+  if (!gig) return <div className="p-6 text-white/80">Gig not found</div>;
 
   return (
-    <div className="w-full max-w-5xl mx-auto relative">
-      {/* ✅ Toast */}
-      {toast.message && (
-        <div className="fixed top-6 right-6 z-[999]">
+    <div className="p-6 text-white">
+      {toast.show && (
+        <div className="fixed top-6 right-6 z-[9999]">
           <div
-            className={`rounded-2xl border px-4 py-3 shadow-lg backdrop-blur-heavy min-w-[260px]
-            ${
-              toast.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                : "bg-red-500/10 border-red-500/30 text-red-200"
+            className={`px-4 py-3 rounded-2xl border shadow-xl backdrop-blur-md ${
+              toast.type === "error"
+                ? "bg-red-500/20 border-red-400/30 text-red-200"
+                : "bg-green-500/20 border-green-400/30 text-green-200"
             }`}
           >
-            <div className="flex items-start gap-3">
-              <span className="text-lg leading-none">
-                {toast.type === "success" ? "✅" : "⚠️"}
-              </span>
-
-              <p className="text-sm font-medium">{toast.message}</p>
-
-              <button
-                onClick={() => setToast({ type: "", message: "" })}
-                className="ml-auto text-white/60 hover:text-white text-sm"
-              >
-                ✕
-              </button>
-            </div>
+            {toast.msg}
           </div>
         </div>
       )}
 
-      {/* ✅ Withdraw confirm toast */}
-      {showWithdrawConfirm && (
-        <div className="fixed top-6 right-6 z-[999]">
-          <div className="rounded-2xl border border-white/10 bg-dark-card/90 backdrop-blur-heavy px-4 py-4 shadow-lg min-w-[320px]">
-            <div className="flex items-start gap-3">
-              <span className="text-lg leading-none">⚠️</span>
+      <div className="max-w-5xl">
+        <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-3xl font-bold">{gig.title}</h1>
+              <p className="text-white/60 mt-2 leading-relaxed">
+                {gig.description}
+              </p>
+              <p className="mt-5 font-semibold text-lg">₹ {gig.budget}</p>
 
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-white">
-                  Withdraw this gig?
-                </p>
-                <p className="text-xs text-white/60 mt-1">
-                  This will stop receiving new bids for this listing.
+              {/* ✅ Status display */}
+              <p className="mt-2 text-sm text-white/50">
+                Status: <span className="text-white/70">{gig.status}</span>
+              </p>
+            </div>
+
+            {isOwner && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowEditModal(true)}
+                  className="px-5 py-3 rounded-2xl bg-blue-600 text-white hover:bg-blue-700"
+                >
+                  ✏️ Edit Gig
+                </button>
+
+                <button
+                  onClick={handleWithdrawGig}
+                  className="px-5 py-3 rounded-2xl bg-red-600 text-white hover:bg-red-700"
+                >
+                  Withdraw Gig
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {!isOwner && (
+          <div className="mt-8 bg-white/5 border border-white/10 rounded-2xl p-6">
+            <h2 className="text-xl font-bold mb-4">Apply / Place Bid</h2>
+
+            {!userId ? (
+              <p className="text-white/60">Login to place a bid.</p>
+            ) : myBid ? (
+              <div className="text-white/70">
+                <p className="mb-3">
+                  ✅ You already placed a bid:{" "}
+                  <span className="font-semibold">₹ {myBid.amount}</span>
                 </p>
 
-                <div className="mt-4 flex gap-2">
+                <button
+                  onClick={() => handleWithdrawBid(myBid._id)}
+                  disabled={bidLoading}
+                  className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                >
+                  {bidLoading ? "..." : "Withdraw Bid"}
+                </button>
+              </div>
+            ) : (
+              <form onSubmit={handlePlaceBid} className="space-y-3">
+                <textarea
+                  value={bidMessage}
+                  onChange={(e) => setBidMessage(e.target.value)}
+                  placeholder="Write a short proposal..."
+                  className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-purple-400 min-h-[110px]"
+                />
+
+                <div className="flex gap-2 items-center">
+                  <input
+                    type="number"
+                    value={bidAmount}
+                    onChange={(e) => setBidAmount(e.target.value)}
+                    placeholder="Enter amount (₹)"
+                    className="flex-1 bg-black/30 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-purple-400"
+                  />
+
                   <button
-                    onClick={async () => {
-                      setShowWithdrawConfirm(false);
-                      await handleWithdraw();
-                    }}
-                    className="rounded-xl bg-gradient-primary px-4 py-2 text-sm font-semibold text-white hover:opacity-95 active:scale-[0.98]"
+                    type="submit"
+                    disabled={bidLoading}
+                    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-semibold"
                   >
-                    Yes, Withdraw
+                    {bidLoading ? "..." : "Place Bid"}
                   </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )}
 
+        <div className="mt-8 bg-white/5 border border-white/10 rounded-2xl p-6">
+          <h2 className="text-2xl font-bold mb-4">Bids</h2>
+
+          {!bids?.length ? (
+            <p className="text-white/50">No bids yet.</p>
+          ) : (
+            <div className="space-y-3">
+              {bids.map((b) => {
+                const bidderId = b?.bidder?._id || b?.bidder?.id || b?.bidder;
+                const isMyBidRow =
+                  userId && String(bidderId) === String(userId);
+
+                return (
+                  <div
+                    key={b._id}
+                    className="border border-white/10 rounded-2xl p-4 flex items-center justify-between bg-black/20"
+                  >
+                    <div>
+                      <p className="font-semibold text-lg">₹ {b.amount}</p>
+                      <p className="text-sm text-white/50">
+                        Bidder: {b?.bidder?.name || bidderId || "Unknown"}
+                      </p>
+                      {b?.message && (
+                        <p className="text-sm text-white/70 mt-2">{b.message}</p>
+                      )}
+                    </div>
+
+                    <div className="flex gap-2">
+                      {isMyBidRow && (
+                        <button
+                          onClick={() => handleWithdrawBid(b._id)}
+                          disabled={bidLoading}
+                          className="px-4 py-2 rounded-xl bg-red-600 text-white hover:bg-red-700"
+                        >
+                          {bidLoading ? "..." : "Withdraw"}
+                        </button>
+                      )}
+
+                      {isOwner && (
+                        <button
+                          onClick={() => handleHireBid(b._id)}
+                          disabled={bidLoading || !canHire}
+                          className={`px-4 py-2 rounded-xl text-white ${
+                            !canHire
+                              ? "bg-green-600/30 cursor-not-allowed"
+                              : "bg-green-600 hover:bg-green-700"
+                          }`}
+                          title={!canHire ? "Gig is not open" : "Hire freelancer"}
+                        >
+                          {bidLoading ? "..." : canHire ? "Hire" : "Hire Disabled"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {showEditModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+            <div className="bg-[#0B0F19] text-white rounded-2xl w-full max-w-lg p-6 shadow-2xl border border-white/10">
+              <h2 className="text-xl font-bold mb-4">Edit Gig</h2>
+
+              <form onSubmit={handleUpdateGig} className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-white/80">
+                    Title
+                  </label>
+                  <input
+                    value={editForm.title}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, title: e.target.value }))
+                    }
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 mt-1 outline-none focus:border-purple-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-white/80">
+                    Description
+                  </label>
+                  <textarea
+                    value={editForm.description}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, description: e.target.value }))
+                    }
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 mt-1 min-h-[110px] outline-none focus:border-purple-400"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-white/80">
+                    Budget
+                  </label>
+                  <input
+                    type="number"
+                    value={editForm.budget}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, budget: e.target.value }))
+                    }
+                    className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 mt-1 outline-none focus:border-purple-400"
+                    required
+                  />
+                </div>
+
+                <div className="flex gap-2 justify-end pt-2">
                   <button
-                    onClick={() => setShowWithdrawConfirm(false)}
-                    className="rounded-xl border border-white/15 bg-black/20 px-4 py-2 text-sm font-semibold text-white/80 hover:bg-white/5 active:scale-[0.98]"
+                    type="button"
+                    onClick={() => setShowEditModal(false)}
+                    className="px-4 py-2 rounded-xl border border-white/10 hover:bg-white/5"
+                    disabled={editLoading}
                   >
                     Cancel
                   </button>
+
+                  <button
+                    type="submit"
+                    className="px-4 py-2 rounded-xl bg-green-600 text-white hover:bg-green-700"
+                    disabled={editLoading}
+                  >
+                    {editLoading ? "Updating..." : "Save Changes"}
+                  </button>
                 </div>
-              </div>
-
-              <button
-                onClick={() => setShowWithdrawConfirm(false)}
-                className="ml-auto text-white/60 hover:text-white text-sm"
-              >
-                ✕
-              </button>
+              </form>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Gig Info */}
-      <div className="rounded-3xl border border-white/10 bg-dark-card/70 backdrop-blur-heavy p-6 md:p-8 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-        <h2 className="text-3xl md:text-4xl font-bold text-white mb-3">
-          {gig.title}
-        </h2>
-
-        <p className="text-white/65 leading-relaxed">{gig.description}</p>
-
-        <div className="mt-6 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-6">
-          <p className="text-white font-medium">
-            Budget:{" "}
-            <span className="text-primary font-bold">₹{gig.budget}</span>
-          </p>
-
-          <p className="text-white/70">
-            Status:{" "}
-            <span
-              className={`font-semibold ${
-                gig.status === "open"
-                  ? "text-emerald-300"
-                  : gig.status === "withdrawn"
-                  ? "text-red-300"
-                  : "text-yellow-300"
-              }`}
-            >
-              {gig.status}
-            </span>
-          </p>
-        </div>
-
-        {/* ✅ Withdraw Button */}
-        {isOwner && isOpen && (
-          <div className="mt-6">
-            <button
-              className="inline-flex items-center justify-center rounded-xl px-5 py-3 font-semibold text-white transition active:scale-[0.98]
-              bg-red-500/15 border border-red-500/30 hover:bg-red-500/25"
-              onClick={() => setShowWithdrawConfirm(true)}
-            >
-              Withdraw Gig
-            </button>
           </div>
         )}
+
+        <div className="mt-8">
+          <button
+            onClick={() => navigate("/gigs")}
+            className="text-white/60 hover:text-white underline"
+          >
+            ← Back to gigs
+          </button>
+        </div>
       </div>
-
-      {/* OWNER VIEW: Bids */}
-      {isOwner && (
-        <div className="mt-6 rounded-3xl border border-white/10 bg-dark-card/70 backdrop-blur-heavy p-6 md:p-8 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-          <h3 className="text-2xl font-bold text-white mb-5">Bids</h3>
-
-          {bidsLoading ? (
-            <p className="text-white/70 mt-6">Loading bids...</p>
-          ) : bids.length === 0 ? (
-            <p className="text-white/60 mt-6">No bids yet.</p>
-          ) : (
-            <div className="mt-6 grid grid-cols-1 gap-4">
-              {bids.map((bid) => (
-                <div
-                  key={bid._id}
-                  className="rounded-2xl border border-white/10 bg-dark-darker/50 backdrop-blur-heavy p-5 transition hover:border-primary/30 hover:bg-dark-darker/70"
-                >
-                  <div className="flex flex-col gap-3">
-                    <p className="text-white/70 leading-relaxed">
-                      {bid.message}
-                    </p>
-
-                    <p className="text-white font-medium">
-                      Amount:{" "}
-                      <span className="text-primary font-bold">
-                        ₹{bid.amount}
-                      </span>
-                    </p>
-
-                    {isOpen && (
-                      <button
-                        className="mt-2 inline-flex items-center justify-center rounded-xl bg-gradient-primary px-5 py-3 font-semibold text-white transition hover:opacity-95 active:scale-[0.98]"
-                        onClick={() => handleHire(bid._id)}
-                      >
-                        Hire
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* FREELANCER VIEW */}
-      {!isOwner && (
-        <div className="mt-6 rounded-3xl border border-white/10 bg-dark-card/70 backdrop-blur-heavy p-6 md:p-8 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
-          <h3 className="text-2xl font-bold text-white mb-5">Place a Bid</h3>
-
-          {!isOpen ? (
-            <p className="text-white/60">This gig is not open for bidding.</p>
-          ) : (
-            <form className="flex flex-col gap-4" onSubmit={handleBidSubmit}>
-              <textarea
-                className="w-full rounded-xl border border-white/10 bg-dark-darker/60 backdrop-blur-heavy px-4 py-3 text-white placeholder:text-white/40 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20 resize-none"
-                placeholder="Write your bid message..."
-                value={bidMessage}
-                onChange={(e) => setBidMessage(e.target.value)}
-                required
-                rows={4}
-              />
-
-              <input
-                className="w-full rounded-xl border border-white/10 bg-dark-darker/60 backdrop-blur-heavy px-4 py-3 text-white placeholder:text-white/40 outline-none transition focus:border-primary/50 focus:ring-2 focus:ring-primary/20"
-                type="number"
-                placeholder="Your price (₹)"
-                value={bidPrice}
-                onChange={(e) => setBidPrice(e.target.value)}
-                required
-              />
-
-              <button
-                className="mt-1 inline-flex items-center justify-center rounded-xl bg-gradient-primary px-5 py-3 font-semibold text-white transition hover:opacity-95 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={bidLoading}
-              >
-                {bidLoading ? "Submitting..." : "Submit Bid"}
-              </button>
-            </form>
-          )}
-        </div>
-      )}
     </div>
   );
 }

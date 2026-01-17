@@ -178,3 +178,29 @@ exports.getMyBids = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+exports.withdrawBid = async (req, res) => {
+  try {
+    const { bidId } = req.params;
+
+    const bid = await Bid.findById(bidId);
+    if (!bid) return res.status(404).json({ message: "Bid not found" });
+
+    // ✅ only bidder can withdraw
+    if (bid.freelancerId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    // ✅ can't withdraw after hired
+    if (bid.status === "hired") {
+      return res.status(400).json({ message: "Cannot withdraw hired bid" });
+    }
+
+    await Bid.findByIdAndDelete(bidId);
+
+    return res.status(200).json({ message: "Bid withdrawn ✅" });
+  } catch (err) {
+    console.log("withdrawBid error:", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
