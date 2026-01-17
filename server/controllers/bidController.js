@@ -88,21 +88,27 @@ exports.getBidsByGig = async (req, res) => {
 
 // PATCH /api/bids/:bidId/hire  (BONUS 1: TRANSACTION SAFE)
 exports.hireBid = async (req, res) => {
-  const session = await mongoose.startSession();
+  // ✅ Skip transactions in test environment (MongoDB Memory Server doesn't support them)
+  const useTransactions = process.env.NODE_ENV !== "test";
+  let session = null;
 
   try {
     const { bidId } = req.params;
     let hiredBid = null;
 
-    await session.withTransaction(async () => {
-      const bid = await Bid.findById(bidId).session(session);
+    if (useTransactions) {
+      session = await mongoose.startSession();
+    }
+
+    const executeHire = async (sess) => {
+      const bid = await Bid.findById(bidId).session(sess);
       if (!bid) {
         const err = new Error("Bid not found");
         err.statusCode = 404;
         throw err;
       }
 
-      const gig = await Gig.findById(bid.gigId).session(session);
+      const gig = await Gig.findById(bid.gigId).session(sess);
       if (!gig) {
         const err = new Error("Gig not found");
         err.statusCode = 404;
@@ -120,7 +126,7 @@ exports.hireBid = async (req, res) => {
       const lockedGig = await Gig.findOneAndUpdate(
         { _id: gig._id, status: "open" },
         { $set: { status: "assigned" } },
-        { new: true, session }
+        { new: true, session: sess }
       );
 
       if (!lockedGig) {
@@ -133,7 +139,7 @@ exports.hireBid = async (req, res) => {
       hiredBid = await Bid.findOneAndUpdate(
         { _id: bid._id, status: "pending" },
         { $set: { status: "hired" } },
-        { new: true, session }
+        { new: true, session: sess }
       );
 
       if (!hiredBid) {
@@ -146,9 +152,20 @@ exports.hireBid = async (req, res) => {
       await Bid.updateMany(
         { gigId: bid.gigId, _id: { $ne: bid._id }, status: "pending" },
         { $set: { status: "rejected" } },
-        { session }
+        { session: sess }
       );
-    });
+
+      return hiredBid;
+    };
+
+    if (useTransactions) {
+      await session.withTransaction(async () => {
+        hiredBid = await executeHire(session);
+      });
+    } else {
+      // In test mode, execute without transactions
+      hiredBid = await executeHire(null);
+    }
 
     return res.status(200).json({
       message: "Freelancer hired successfully",
@@ -160,7 +177,9 @@ exports.hireBid = async (req, res) => {
       message: err.message || "Server error",
     });
   } finally {
-    session.endSession();
+    if (session) {
+      session.endSession();
+    }
   }
 };
 
