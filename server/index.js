@@ -18,63 +18,55 @@ const helmet = require("helmet");
 const xss = require("xss-clean");
 const rateLimit = require("express-rate-limit");
 
+// ✅ CORS CONFIGURATION - MUST BE BEFORE OTHER MIDDLEWARE
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:5000", 
+  "https://gigflow-beta.vercel.app",
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+const allowedOriginRegex = [/^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/];
+
+// ✅ Apply CORS first - before any other middleware
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl, postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      if (allowedOriginRegex.some((rx) => rx.test(origin))) {
+        return callback(null, true);
+      }
+
+      console.log("❌ CORS blocked origin:", origin);
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    exposedHeaders: ["Set-Cookie"],
+  })
+);
+
 // middlewares
 app.use(express.json());
 app.use(cookieParser());
 app.use(helmet());
 
-
 if (process.env.NODE_ENV === "production") {
   app.use(xss());
 }
-
-
-
-const allowedOrigins = [
-  "http://localhost:5173", 
-  process.env.CLIENT_URL,
-  "https://gigflow-beta.vercel.app",
-].filter(Boolean);
-
-const allowedOriginRegex = [/^https:\/\/gigflow-[a-z0-9-]+\.vercel\.app$/];
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
   max: 30, // 30 requests per window per IP
   message: { message: "Too many requests. Try again later." },
 });
-
-// ✅ DEV: allow all origins (avoid CORS headache)
-if (process.env.NODE_ENV !== "production") {
-  app.use(
-    cors({
-      origin: true,
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-    })
-  );
-} else {
-  // ✅ PROD: strict allowlist
-  app.use(
-    cors({
-      origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-
-        if (allowedOriginRegex.some((rx) => rx.test(origin))) {
-          return callback(null, true);
-        }
-
-        return callback(new Error("Not allowed by CORS: " + origin));
-      },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
-    })
-  );
-}
 
 // routes
 app.use("/api/auth", authRoutes);
@@ -151,6 +143,7 @@ const startServer = async () => {
 
     server.listen(PORT, () => {
       console.log(`Server running on port ${PORT} ✅`);
+      console.log("Allowed origins:", allowedOrigins);
     });
   } catch (err) {
     console.log("MongoDB connection error ❌", err);
