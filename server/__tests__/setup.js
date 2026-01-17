@@ -1,14 +1,18 @@
 const mongoose = require("mongoose");
-require("dotenv").config();
+const { MongoMemoryServer } = require("mongodb-memory-server");
+
+let mongoServer;
 
 beforeAll(async () => {
-  const mongoUri = process.env.MONGO_URI_TEST || process.env.MONGO_URI;
-  await mongoose.connect(mongoUri);
+  mongoServer = await MongoMemoryServer.create();
+  const uri = mongoServer.getUri();
 
-  console.log("✅ Connected DB in tests:", mongoose.connection.db.databaseName);
+  await mongoose.connect(uri);
 });
 
 afterEach(async () => {
+  if (!mongoose.connection?.db) return;
+
   const collections = await mongoose.connection.db.collections();
   for (let collection of collections) {
     await collection.deleteMany({});
@@ -16,5 +20,6 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await mongoose.connection.close();
+  await mongoose.disconnect();
+  if (mongoServer) await mongoServer.stop();
 });
