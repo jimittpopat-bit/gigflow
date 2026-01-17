@@ -27,4 +27,7 @@ jobs:
 
       - name: Run tests (server)
         working-directory: server
+        env:
+          NODE_ENV: test
+          JWT_SECRET: test_secret
         run: npm test -- --runInBand
